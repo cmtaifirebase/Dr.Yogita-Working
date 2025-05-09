@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useBooking } from "@/contexts/booking-context"
 import { Input } from "@/components/ui/input"
@@ -115,7 +114,7 @@ export function BookingForm() {
             <div className="text-gray-500">Service:</div>
             <div className="text-right font-medium">{selectedService?.title}</div>
             <div className="text-gray-500">Date:</div>
-            <div className="text-right font-medium">{format(selectedDate, "MMMM d, yyyy")}</div>
+            <div className="text-right font-medium">{selectedDate ? format(selectedDate, "MMMM d, yyyy") : ""}</div>
             <div className="text-gray-500">Time:</div>
             <div className="text-right font-medium">{selectedTime}</div>
             <div className="text-gray-500">Name:</div>
