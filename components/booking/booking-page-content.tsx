@@ -20,13 +20,13 @@ export default function BookingPageContent() {
 
   // Set the service from URL parameter if available
   useEffect(() => {
-    if (serviceSlug) {
-      const service = getServiceBySlug(serviceSlug)
-      if (service) {
-        setSelectedService(service)
-      }
-    }
-  }, [serviceSlug, setSelectedService])
+  if (typeof window === "undefined") return
+  const slug = new URLSearchParams(window.location.search).get("service")
+  if (slug) {
+    const service = getServiceBySlug(slug)
+    if (service) setSelectedService(service)
+  }
+}, [setSelectedService])
 
   const steps = [
     { number: 1, title: "Select Service" },
