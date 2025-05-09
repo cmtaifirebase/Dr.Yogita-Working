@@ -1,32 +1,57 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { motion } from "framer-motion"
-import { useSearchParams } from "next/navigation"
 import { BookingCalendar } from "@/components/booking/booking-calendar"
 import { BookingForm } from "@/components/booking/booking-form"
 import { BookingSummary } from "@/components/booking/booking-summary"
 import { BookingServiceSelector } from "@/components/booking/booking-service-selector"
 import { useBooking } from "@/contexts/booking-context"
-import { getServiceBySlug } from "@/lib/services"
+// Assuming Service type is exported from your services file, e.g.:
+// export interface Service { id: string; name: string; slug: string; /* ...other properties */ }
+import { getServiceBySlug, Service } from "@/lib/services"
 import { ArrowLeft, ArrowRight, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 export default function BookingPageContent() {
-  const searchParams = useSearchParams()
-  const serviceSlug = searchParams.get("service")
   const { selectedDate, selectedTime, selectedService, setSelectedService } = useBooking()
   const [step, setStep] = useState(1)
+  const [initialServiceSlug, setInitialServiceSlug] = useState<string | null>(null)
+  const [isClient, setIsClient] = useState(false)
 
-  // Set the service from URL parameter if available
+  // Set isClient to true once component mounts on the client
   useEffect(() => {
-  if (typeof window === "undefined") return
-  const slug = new URLSearchParams(window.location.search).get("service")
-  if (slug) {
-    const service = getServiceBySlug(slug)
-    if (service) setSelectedService(service)
-  }
-}, [setSelectedService])
+    setIsClient(true)
+  }, [])
+
+  // Effect to get service slug from URL, only runs on client
+  useEffect(() => {
+    if (isClient) {
+      const params = new URLSearchParams(window.location.search)
+      const slugFromUrl = params.get("service")
+      if (slugFromUrl) {
+        setInitialServiceSlug(slugFromUrl)
+      }
+    }
+  }, [isClient]) // Re-run if isClient changes (though it only changes once)
+
+  // Effect to set the service in context based on the slug from URL
+  // useCallback for setSelectedService is good practice if it's passed as a prop or used in deps,
+  // though setters from useState are stable. Assuming useBooking might provide a memoized setter.
+  const stableSetSelectedService = useCallback(setSelectedService, [setSelectedService]);
+
+  useEffect(() => {
+    if (initialServiceSlug && stableSetSelectedService) {
+      const service = getServiceBySlug(initialServiceSlug)
+      if (service) {
+        stableSetSelectedService(service as Service) // Cast if necessary, or ensure getServiceBySlug returns typed Service
+      } else {
+        console.warn(`Service with slug "${initialServiceSlug}" not found.`)
+        // Optionally, clear the selected service if slug is invalid
+        // stableSetSelectedService(null);
+      }
+    }
+  }, [initialServiceSlug, stableSetSelectedService])
 
   const steps = [
     { number: 1, title: "Select Service" },
@@ -37,7 +62,7 @@ export default function BookingPageContent() {
   const nextStep = () => {
     if (step === 1 && !selectedService) return
     if (step === 2 && (!selectedDate || !selectedTime)) return
-    setStep((prev) => Math.min(prev + 1, 3))
+    setStep((prev) => Math.min(prev + 1, steps.length))
   }
 
   const prevStep = () => {
@@ -74,14 +99,16 @@ export default function BookingPageContent() {
                   >
                     {step > s.number ? <Check className="h-5 w-5" /> : s.number}
                   </div>
-                  <div className="hidden sm:block ml-3 mr-10">
+                  <div className="hidden sm:block ml-3 mr-10"> {/* Consistent margin */}
                     <p className={`text-sm font-medium ${step >= s.number ? "text-gray-800" : "text-gray-400"}`}>
                       {s.title}
                     </p>
                   </div>
                   {i < steps.length - 1 && (
                     <div
-                      className={`hidden sm:block w-20 h-1 mr-10 ${step > s.number ? "bg-pink-500" : "bg-gray-200"}`}
+                      className={`hidden sm:block w-20 h-1 ${i < steps.length - 1 ? "mr-10" : ""} ${
+                        step > s.number ? "bg-pink-500" : "bg-gray-200"
+                      } transition-colors duration-300`}
                     ></div>
                   )}
                 </div>
@@ -117,7 +144,7 @@ export default function BookingPageContent() {
               )}
             </div>
 
-            <div className="px-6 md:px-8 py-4 bg-gray-50 border-t border-pink-100 flex justify-between">
+            <div className="px-6 md:px-8 py-4 bg-gray-50 border-t border-pink-100 flex justify-between items-center">
               {step > 1 ? (
                 <Button
                   type="button"
@@ -132,7 +159,7 @@ export default function BookingPageContent() {
                 <div></div>
               )}
 
-              {step < 3 && (
+              {step < steps.length && (
                 <Button
                   type="button"
                   onClick={nextStep}
@@ -143,6 +170,7 @@ export default function BookingPageContent() {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               )}
+              {/* Note: A "Submit" button for step 3 would typically be part of BookingForm */}
             </div>
           </div>
         </div>
