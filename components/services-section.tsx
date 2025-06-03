@@ -4,6 +4,7 @@ import { useState } from "react"
 import { motion } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import Link from "next/link"
 import { SpadeIcon as Spine, ArrowUpRight, MonitorSmartphone, BatteryCharging } from "lucide-react"
 
 export default function ServicesSection() {
@@ -69,36 +70,41 @@ export default function ServicesSection() {
               className="perspective-1000"
             >
               <div
-                className={`relative w-full h-80 transition-transform duration-500 transform-style-3d cursor-pointer ${
-                  flipped === index ? "rotate-y-180" : ""
-                }`}
+                className={`relative w-full h-80 transition-transform duration-500 transform-style-3d cursor-pointer ${flipped === index ? "rotate-y-180" : ""
+                  }`}
                 onClick={() => handleFlip(index)}
               >
                 {/* Front of card */}
                 <Card
-                  className={`absolute w-full h-full backface-hidden ${
-                    flipped === index ? "invisible" : ""
-                  } hover:shadow-lg transition-shadow duration-300 card-hover border-pink-100`}
+                  className={`absolute w-full h-full backface-hidden ${flipped === index ? "invisible" : ""
+                    } hover:shadow-lg transition-shadow duration-300 card-hover border-pink-100`}
                 >
                   <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                     <div className="mb-6">{service.icon}</div>
                     <h3 className="text-xl font-semibold text-gray-800 mb-3">{service.title}</h3>
-                    <div className="w-12 h-0.5 bg-pink-300 mx-auto"></div>
+                    <div className="w-12 h-0.5 bg-pink-300 mx-auto mb-8"></div>
+
+                    <Button variant="outline" className="border-pink-400 text-pink-600 hover:bg-pink-50">
+                      To Know More
+                    </Button>
                   </CardContent>
+
                 </Card>
 
                 {/* Back of card */}
                 <Card
-                  className={`absolute w-full h-full backface-hidden rotate-y-180 ${
-                    flipped === index ? "" : "invisible"
-                  } border-pink-300 bg-gradient-to-br from-pink-50 to-white`}
+                  className={`absolute w-full h-full backface-hidden rotate-y-180 ${flipped === index ? "" : "invisible"
+                    } border-pink-300 bg-gradient-to-br from-pink-50 to-white`}
                 >
                   <CardContent className="p-6 flex flex-col items-center justify-between h-full text-center">
                     <h3 className="text-xl font-semibold text-pink-600 mb-4">{service.title}</h3>
                     <p className="text-gray-700 mb-6">{service.description}</p>
-                    <Button variant="outline" className="border-pink-400 text-pink-600 hover:bg-pink-50">
-                      Know More
-                    </Button>
+                    <Link href="/booking">
+                      <Button variant="outline" className="border-pink-400 text-pink-600 hover:bg-pink-50">
+                        Know More
+                      </Button>
+                    </Link>
+
                   </CardContent>
                 </Card>
               </div>
