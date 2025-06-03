@@ -38,6 +38,7 @@ export default function MeetDrYogita() {
           >
             <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Meet Dr. Yogita</h2>
             <div className="w-20 h-1 bg-pink-500 mb-6"></div>
+            <p className="text-xl text-pink-600 font-medium mb-6">Chief Physiotherapist | Ortho Specialist</p>
             <p className="text-gray-600 mb-6">
               With over 23 years of distinguished experience, Dr. Yogita Kumari is a leading physiotherapist
                specializing in back pain management, posture correction, 
