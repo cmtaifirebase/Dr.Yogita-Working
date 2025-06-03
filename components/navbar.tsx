@@ -191,7 +191,7 @@ export default function Navbar() {
             <Image src="/Logo.png" alt="Dr. Yogita Physiotherapy" width={50} height={50} className="mr-3 rounded-lg" />
             <div>
               <h1 className="text-xl font-bold text-gray-800">Dr. Yogita</h1>
-              <p className="text-xs text-pink-600">Physiotherapy Clinic</p>
+              <p className="text-xs text-pink-600">Chief Physiotherapy</p>
             </div>
           </Link>
 
