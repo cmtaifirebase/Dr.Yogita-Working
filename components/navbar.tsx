@@ -175,8 +175,8 @@ export default function Navbar() {
   const navLinks = [
     { name: "Home", href: "/" },
     { name: "About", href: "/about" },
-    { name: "Library", href: "/library" },
-    { name: "Nutrition", href: "/nutrition" },
+    { name: "Relief Read", href: "/library" },
+    { name: "Nourishwell", href: "/nutrition" },
     // { name: "Free Gift", href: "/gift" },
   ];
 
@@ -324,8 +324,8 @@ export default function Navbar() {
                   >
                     <div className="py-1">
                       {[
-                        { name: "Library", href: "/library" },
-                        { name: "Nutrition", href: "/nutrition" },
+                        { name: "Relief Read", href: "/library" },
+                        { name: "Nourishwell", href: "/nutrition" },
                       ].map((item) => (
                         <Link
                           key={item.name}
@@ -344,7 +344,7 @@ export default function Navbar() {
 
             {navLinks
               .filter((link) =>
-                !["Shop", "Library", "Nutrition", "Blog", "Podcast", "Programs"].includes(link.name)
+                !["Shop", "Relief Read", "Nourishwell", "Blog", "Podcast", "Programs"].includes(link.name)
               )
               .slice(2) 
               .map((link) => (
@@ -525,8 +525,8 @@ export default function Navbar() {
                         className="pl-4 mt-1 space-y-1 border-l-2 border-pink-100 max-h-48 overflow-y-auto pr-1 custom-scroll py-1"
                       >
                         {[
-                          { name: "Library", href: "/library" },
-                          { name: "Nutrition", href: "/nutrition" },
+                          { name: "Relief Read", href: "/library" },
+                          { name: "Nourishwell", href: "/nutrition" },
                         ].map((link) => (
                           <Link
                             key={link.name}
@@ -546,7 +546,7 @@ export default function Navbar() {
                 {navLinks
                   .filter(
                     (link) =>
-                      !["Shop", "Library", "Nutrition"].includes(link.name) && 
+                      !["Shop", "Relief Read", "Nutrition"].includes(link.name) && 
                       !["Home", "About"].includes(link.name) 
                   )
                   .map((link) => (
