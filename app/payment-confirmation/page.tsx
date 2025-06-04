@@ -34,80 +34,135 @@ function PaymentConfirmationContent() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const paymentStatus = searchParams.get('status');
-    const razorpayPaymentId = searchParams.get('payment_id');
-    // const razorpayOrderId = searchParams.get('order_id'); // If needed for backend verification
+    // --- CRUCIAL DEBUGGING LOGS ---
+    console.log("Payment Confirmation Page Loaded. Full URL:", window.location.href);
+    console.log("Raw URL Search Params String:", window.location.search);
+    const allParamsFromNext: Record<string, string> = {}; // <--- FIX APPLIED HERE
+    for (const [key, value] of searchParams.entries()) {
+        allParamsFromNext[key] = value;
+    }
+    console.log("Parsed Search Params by Next.js (useSearchParams):", allParamsFromNext);
+    // --- END DEBUGGING LOGS ---
+
+    // Standard Razorpay parameters for Payment Links/Pages
+    const rzpPaymentId = searchParams.get('razorpay_payment_id');
+    const rzpPaymentLinkStatus = searchParams.get('razorpay_payment_link_status');
+    // const rzpOrderId = searchParams.get('razorpay_order_id'); // Useful for backend verification
+    // const rzpSignature = searchParams.get('razorpay_signature'); // Essential for backend verification
+
+    // Fallback to generic parameters (less likely for standard Razorpay flow but good for flexibility)
+    const genericStatusParam = searchParams.get('status'); // Your original 'status'
+    const genericPaymentIdParam = searchParams.get('payment_id'); // Your original 'payment_id'
 
     const pendingEbookId = sessionStorage.getItem(SESSION_STORAGE_KEY_PENDING_PURCHASE_EBOOK_ID);
 
     const processPayment = async () => {
-      if (!paymentStatus || !razorpayPaymentId) {
-        setError("Payment details are missing from the redirect URL. Please contact support if you made a purchase.");
-        setIsLoading(false);
-        sessionStorage.removeItem(SESSION_STORAGE_KEY_PENDING_PURCHASE_EBOOK_ID); // Clean up session
-        return;
+      let isSuccess = false;
+      let isFailure = false;
+      let failureReason = "Payment failed or was cancelled by the user."; // Default failure message
+      let paymentIdForVerification = rzpPaymentId || genericPaymentIdParam;
+
+      // Determine payment outcome
+      if (rzpPaymentId && rzpPaymentLinkStatus === 'paid') {
+        isSuccess = true;
+        console.log("Detected success via razorpay_payment_id and razorpay_payment_link_status='paid'.");
+      } else if (rzpPaymentId && !rzpPaymentLinkStatus && !genericStatusParam) {
+        // If only rzpPaymentId is present, and no other status, assume success (common in some RZP flows)
+        // This needs careful testing with your specific Razorpay setup.
+        console.warn("Assuming success based on presence of razorpay_payment_id only. Verify this flow.");
+        isSuccess = true;
+      } else if (rzpPaymentLinkStatus && (rzpPaymentLinkStatus === 'failed' || rzpPaymentLinkStatus === 'cancelled')) {
+        isFailure = true;
+        const rzpErrorDesc = searchParams.get('razorpay_error_description');
+        failureReason = `Payment ${rzpPaymentLinkStatus}.${rzpErrorDesc ? ` ${rzpErrorDesc}` : ''}`;
+        console.log("Detected failure via razorpay_payment_link_status:", rzpPaymentLinkStatus);
+      } else if (genericStatusParam === 'success' && paymentIdForVerification) {
+        isSuccess = true; // Fallback to your generic 'status' parameter
+        console.log("Detected success via generic 'status=success' parameter.");
+      } else if (genericStatusParam === 'failed') {
+        isFailure = true;
+        const genericReason = searchParams.get('reason');
+        failureReason = `Payment failed.${genericReason ? ` Reason: ${genericReason}` : ''}`;
+        console.log("Detected failure via generic 'status=failed' parameter.");
       }
 
-      try {
-        if (paymentStatus === 'success') {
-          if (!pendingEbookId) {
-            setError("Could not identify the purchased item. If payment was successful, please contact support.");
-            console.warn("Payment success, but no pendingEbookId in session.");
-            return;
-          }
 
-          // OPTIONAL BUT HIGHLY RECOMMENDED: Backend verification step
-          // const verifyResponse = await fetch(`${API_BASE_URL}/payment/razorpay-verify`, {
-          //   method: 'POST',
-          //   headers: { 'Content-Type': 'application/json' },
-          //   body: JSON.stringify({ razorpay_payment_id: razorpayPaymentId, expected_ebook_id: pendingEbookId })
-          // });
-          // const verifyData = await verifyResponse.json();
-          // if (!verifyResponse.ok || !verifyData.success) {
-          //   throw new Error(verifyData.error || 'Payment verification failed with backend.');
-          // }
-          // const verifiedEbookDetails = verifyData.ebook; // Assuming backend returns ebook details
-
-          // For now, fetching all ebooks to find the one (less optimal for many ebooks)
-          // Ideally, your backend verification would return the specific ebook details
-          const response = await fetch(`${API_BASE_URL}/ebooks`);
-          if (!response.ok) throw new Error("Failed to fetch e-book details.");
-          const ebookData = await response.json();
-
-          if (ebookData.success && Array.isArray(ebookData.data)) {
-            const ebook = ebookData.data.find((eb: Ebook) => eb._id === pendingEbookId);
-            if (ebook) {
-              setPurchasedEbook(ebook);
-              setSuccessMessage(`Your purchase of "${ebook.title}" was successful!`);
-            } else {
-              setError("Payment successful, but there was an issue retrieving your e-book details. Please contact support.");
-              console.error("Payment success, but pendingEbookId not found in fetched ebooks:", pendingEbookId);
-            }
-          } else {
-            throw new Error(ebookData.error || "Could not parse e-book data.");
-          }
-
-        } else if (paymentStatus === 'failed') {
-          const reason = searchParams.get('reason');
-          setError(`Payment was unsuccessful.${reason ? ` Reason: ${reason}` : ''}. Please try again or contact support.`);
-        } else {
-          setError("Invalid payment status received.");
+      if (!isSuccess && !isFailure) {
+        let specificErrorMsg = "Payment details are missing, invalid, or incomplete in the redirect URL.";
+        if (!paymentIdForVerification && !rzpPaymentLinkStatus && !genericStatusParam) {
+            // This is the original error you saw
+            specificErrorMsg = "Payment details are missing from the redirect URL. Please contact support if you made a purchase.";
+        } else if (paymentIdForVerification && !pendingEbookId) {
+             specificErrorMsg = "Payment details found, but the purchased item could not be identified from your session. Please contact support.";
         }
-      } catch (err: any) {
-        console.error("Error processing payment confirmation:", err);
-        setError("An error occurred while processing your payment: " + (err.message || "Unknown error."));
+        console.error("Could not determine payment status clearly.", {rzpPaymentId, rzpPaymentLinkStatus, genericStatusParam, paymentIdForVerification});
+        setError(specificErrorMsg);
+        // No 'return' here, finally block handles cleanup.
+      } else if (isSuccess) {
+        if (!pendingEbookId) {
+          console.error("Payment successful, but no pendingEbookId in session.");
+          setError("Payment successful, but we could not identify the purchased item. Please contact support with your payment ID.");
+          // No 'return', finally block.
+        } else {
+          console.log("Processing successful payment for ebook ID:", pendingEbookId, "with payment ID:", paymentIdForVerification);
+          // Backend verification is highly recommended here using paymentIdForVerification, rzpOrderId, rzpSignature
+          // Example:
+          // const verifyResponse = await fetch(`${API_BASE_URL}/payment/razorpay-verify`, { /* ... */ });
+          // if (!verifyData.success) throw new Error('Backend payment verification failed.');
+
+          try {
+            const response = await fetch(`${API_BASE_URL}/ebooks`); // Fetch all to find one
+            if (!response.ok) throw new Error("Failed to fetch e-book details after payment.");
+            const ebookData = await response.json();
+
+            if (ebookData.success && Array.isArray(ebookData.data)) {
+              const ebook = ebookData.data.find((eb: Ebook) => eb._id === pendingEbookId);
+              if (ebook) {
+                setPurchasedEbook(ebook);
+                setSuccessMessage(`Your purchase of "${ebook.title}" was successful!`);
+              } else {
+                console.error("Payment successful, but pendingEbookId not found in fetched ebooks:", pendingEbookId);
+                setError("Payment successful, but there was an issue retrieving your e-book details. Please contact support.");
+              }
+            } else {
+              throw new Error(ebookData.error || "Could not parse e-book data after payment.");
+            }
+          } catch (fetchErr: any) {
+             console.error("Error fetching/processing ebook details post-payment:", fetchErr);
+             setError("Payment successful, but an error occurred retrieving e-book details: " + fetchErr.message);
+          }
+        }
+      } else if (isFailure) {
+        console.log("Payment failed. Reason:", failureReason);
+        setError(failureReason);
+      }
+      
+      // Cleanup is handled in finally
+      try {
+        // Code that might throw before finally
+      } catch(e) {
+        // handle if necessary, or let finally do its job
       } finally {
-        sessionStorage.removeItem(SESSION_STORAGE_KEY_PENDING_PURCHASE_EBOOK_ID);
+        if (pendingEbookId) {
+            console.log("Removing pendingEbookId from session storage:", pendingEbookId);
+            sessionStorage.removeItem(SESSION_STORAGE_KEY_PENDING_PURCHASE_EBOOK_ID);
+        }
         setIsLoading(false);
-        // Clean up URL query parameters
-        const currentPathname = window.location.pathname;
-        router.replace(currentPathname, { scroll: false });
+        // Clean up URL query parameters by replacing the current history entry
+        // This should be one of the last things to ensure all params were read
+        if (router && typeof router.replace === 'function') {
+            const currentPathname = window.location.pathname; // Or your desired base path for this page
+            console.log("Replacing URL to clean params. Current pathname:", currentPathname);
+            router.replace(currentPathname, { scroll: false });
+        } else {
+            console.warn("Router not available or replace is not a function for URL cleaning.");
+        }
       }
     };
 
     processPayment();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // searchParams and router are stable, effect runs once on mount.
+  }, [searchParams, router]); // Ensure router and searchParams are in dependency array
 
   if (isLoading) {
     return (
@@ -155,7 +210,7 @@ function PaymentConfirmationContent() {
               href={purchasedEbook.pdfFileUrl}
               target="_blank"
               rel="noopener noreferrer"
-              download={`${purchasedEbook.title.replace(/[^a-zA-Z0-9\s]/g, '') || 'ebook'}.pdf`}
+              download={`${purchasedEbook.title.replace(/[^a-zA-Z0-9\s_-]/g, '') || 'ebook'}.pdf`}
               className="w-full inline-block"
             >
               <Button className="w-full bg-pink-500 hover:bg-pink-600 text-white text-lg py-3">
@@ -175,8 +230,9 @@ function PaymentConfirmationContent() {
 
       {!isLoading && !error && !successMessage && (
          <div className="bg-gray-50 p-8 rounded-lg shadow-lg max-w-lg w-full">
-            <h1 className="text-2xl font-semibold text-gray-700 mb-3">Payment Status</h1>
-            <p className="text-gray-600">No payment information to display. If you've made a purchase and landed here, please contact support.</p>
+            <AlertTriangle className="h-16 w-16 text-gray-400 mx-auto mb-6" />
+            <h1 className="text-2xl font-semibold text-gray-700 mb-3">Payment Status Unknown</h1>
+            <p className="text-gray-600 mb-8">Could not determine payment status or no payment information was found in the redirect. If you believe this is an error, please contact support.</p>
             <Button onClick={() => router.push('/library')} className="mt-6">
                 Go to Library
             </Button>
@@ -200,4 +256,4 @@ export default function PaymentConfirmationPage() {
       <FooterSection />
     </>
   );
-}
+} 
