@@ -1,91 +1,153 @@
-"use client"
-import { motion } from "framer-motion"
-import { ShoppingCart, Play, Clock, ArrowRight, Youtube } from "lucide-react" // Added Youtube
-import Image from "next/image"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import FooterSection from "@/components/footer-section"
-import { useEffect, useState } from "react" // Added useEffect and useState
+"use client";
+import { motion } from "framer-motion";
+// Adjust icons as needed: ListVideo, Calendar, Clock, Info, PlayCircle, ArrowRight
+import { ListVideo, Info, ArrowRight, ShoppingCart, Play, Clock, Youtube } from "lucide-react";
+import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import FooterSection from "@/components/footer-section";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ProgramModal, ProgramItem } from "@/components/ProgramModal"; // Path to your Modal
 
-// Define a type for your program data for better type safety
-interface Program {
-  _id: string; // MongoDB ID
+// Interface for Program Series
+interface ProgramSeries {
+  _id: string;
   title: string;
   description: string;
-  price: number;
-  duration: string;
-  thumbnailUrl: string; // This will be the Cloudinary URL
+  coverImageUrl: string; // Cloudinary URL for series cover
   slug: string;
-  youtubeLink?: string; // Optional, will be an empty string if not provided
-  createdAt: string; // Or Date
+  category?: string;
+  author?: string;
+  // Add other fields like publishDate if you display them for the series
 }
 
-// Ensure this environment variable is set in your .env.local file for the frontend
-// e.g., NEXT_PUBLIC_API_URL=http://localhost:5001/api
+// Re-using ProgramItem from ProgramModal for episodes/programs within a series
+
+const formatDate = (dateString: string) => { // Keep if needed
+  if (!dateString) return "N/A";
+  try {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  } catch (e) {
+    console.error("Failed to format date:", dateString, e);
+    return "Invalid Date";
+  }
+};
+
 const API_BASE_URL = `${process.env.NEXT_PUBLIC_API_URL}/api` || "http://localhost:5001/api";
 
 export default function ProgramsClientPage() {
-  const [programs, setPrograms] = useState<Program[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [programSeriesList, setProgramSeriesList] = useState<ProgramSeries[]>([]);
+  const [loadingSeries, setLoadingSeries] = useState(true);
+  const [errorSeries, setErrorSeries] = useState<string | null>(null);
 
+  const [selectedProgramSeries, setSelectedProgramSeries] = useState<ProgramSeries | null>(null);
+  const [selectedSeriesPrograms, setSelectedSeriesPrograms] = useState<ProgramItem[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loadingProgramsInModal, setLoadingProgramsInModal] = useState(false);
+  const [errorProgramsInModal, setErrorProgramsInModal] = useState<string | null>(null);
+
+  // Fetch all program series
   useEffect(() => {
-    const fetchPrograms = async () => {
-      setIsLoading(true);
-      setError(null);
+    const fetchProgramSeries = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/programs`);
+        setLoadingSeries(true);
+        setErrorSeries(null);
+        const response = await fetch(`${API_BASE_URL}/program-series`); // Fetch series
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: `HTTP error! status: ${response.status}` }));
-          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+          throw new Error(errorData.error || `Failed to fetch program series: ${response.statusText}`);
         }
-        const data = await response.json();
-        if (data.success) {
-          setPrograms(data.data);
+        const result = await response.json();
+        if (result.success) {
+          setProgramSeriesList(result.data || []);
         } else {
-          throw new Error(data.error || "Failed to fetch programs");
+          throw new Error(result.error || "Failed to parse program series data");
         }
-      } catch (err) {
-        console.error("Error fetching programs:", err);
-        setError(err instanceof Error ? err.message : "An unknown error occurred while fetching programs.");
+      } catch (err: any) {
+        console.error("Error fetching program series:", err);
+        setErrorSeries(err.message || "An unknown error occurred while fetching series.");
       } finally {
-        setIsLoading(false);
+        setLoadingSeries(false);
       }
     };
-
-    fetchPrograms();
+    fetchProgramSeries();
   }, []);
 
-  return (
-    <main className="min-h-screen bg-rose-50/30 pt-20">
-      {/* Hero Section */}
-      <section className="relative py-16 md:py-24 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-pink-50 opacity-70"></div>
-        <div className="absolute inset-0 bg-[url('/programs/programs-pattern.png')] opacity-10"></div>
-        <div className="container mx-auto px-4 relative z-10">
-          <div className="max-w-4xl mx-auto text-center">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-              <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-4">Physiotherapy Programs</h1>
-              <p className="text-xl text-gray-600 mb-8">
-                Expert-designed video programs to help you recover, strengthen, and improve your physical wellbeing from
-                the comfort of your home.
-              </p>
-              <div className="flex flex-wrap justify-center gap-4">
-                <Link href="#program-list">
-                  <Button className="bg-pink-500 hover:bg-pink-600 text-white px-6 py-3 rounded-md font-medium flex items-center">
-                    <ArrowRight className="mr-2 h-5 w-5" />
-                    Explore Programs
-                  </Button>
-                </Link>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      </section>
+  // Function to fetch programs (items) for a selected series
+  const fetchProgramsForSeries = async (seriesId: string) => {
+    if (!seriesId) return;
+    try {
+      setLoadingProgramsInModal(true);
+      setErrorProgramsInModal(null);
+      setSelectedSeriesPrograms([]);
+      // Use the new backend route: /api/programs/series/:seriesId
+      const response = await fetch(`${API_BASE_URL}/programs/series/${seriesId}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: `HTTP error! status: ${response.status}` }));
+        throw new Error(errorData.error || `Failed to fetch programs for series: ${response.statusText}`);
+      }
+      const result = await response.json();
+      if (result.success) {
+        setSelectedSeriesPrograms(result.data || []);
+      } else {
+        throw new Error(result.error || "Failed to parse programs for series");
+      }
+    } catch (err: any) {
+      console.error(`Error fetching programs for series ${seriesId}:`, err);
+      setErrorProgramsInModal(err.message || "An unknown error occurred while fetching programs for modal.");
+    } finally {
+      setLoadingProgramsInModal(false);
+    }
+  };
 
-      {/* How It Works Section */}
-      <section className="py-16 bg-white">
-        <div className="container mx-auto px-4">
+  const handleOpenProgramModal = (series: ProgramSeries) => {
+    setSelectedProgramSeries(series);
+    setIsModalOpen(true);
+    fetchProgramsForSeries(series._id);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedProgramSeries(null);
+    setSelectedSeriesPrograms([]);
+    setErrorProgramsInModal(null);
+  };
+
+  return (
+    <>
+      <main className="min-h-screen bg-rose-50/30 pt-20">
+        {/* Hero Section (Similar to original) */}
+        <section className="relative py-16 md:py-24 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-pink-50 opacity-70"></div>
+          <div className="absolute inset-0 bg-[url('/programs/programs-pattern.png')] opacity-10"></div>
+          <div className="container mx-auto px-4 relative z-10">
+            <div className="max-w-4xl mx-auto text-center">
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+                <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-4">Physiotherapy Program Series</h1>
+                <p className="text-xl text-gray-600 mb-8">
+                  Explore our curated series of expert-designed video programs to help you recover, strengthen, and improve your physical wellbeing.
+                </p>
+                <div className="flex flex-wrap justify-center gap-4">
+                  <Link href="#program-series-list">
+                    <Button className="bg-pink-500 hover:bg-pink-600 text-white px-6 py-3 rounded-md font-medium flex items-center">
+                      <ArrowRight className="mr-2 h-5 w-5" />
+                      Explore Program Series
+                    </Button>
+                  </Link>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        </section>
+
+        {/* How It Works Section (Can remain similar or be adapted) */}
+        <section className="py-16 bg-white">
+          {/* ... your existing "How It Works" section ... */}
+           <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -107,9 +169,9 @@ export default function ProgramsClientPage() {
               <div className="bg-pink-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                 <ShoppingCart className="h-8 w-8 text-pink-500" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">1. Purchase a Program</h3>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">1. Choose & Purchase</h3>
               <p className="text-gray-600">
-                Choose a program that addresses your specific needs and complete the purchase process.
+                Select a program from a series or an individual program that fits your needs and complete the purchase.
               </p>
             </motion.div>
             <motion.div
@@ -131,7 +193,7 @@ export default function ProgramsClientPage() {
               </div>
               <h3 className="text-xl font-semibold text-gray-800 mb-2">2. Receive on WhatsApp</h3>
               <p className="text-gray-600">
-                The full program video will be sent directly to your WhatsApp for easy access.
+                The full program video(s) will be sent directly to your WhatsApp for easy access.
               </p>
             </motion.div>
             <motion.div
@@ -145,111 +207,95 @@ export default function ProgramsClientPage() {
                 <Play className="h-8 w-8 text-green-500" />
               </div>
               <h3 className="text-xl font-semibold text-gray-800 mb-2">3. Follow Along</h3>
-              <p className="text-gray-600">Follow the expert guidance in the video at your own pace and convenience.</p>
+              <p className="text-gray-600">Follow the expert guidance in the video(s) at your own pace.</p>
             </motion.div>
           </div>
         </div>
-      </section>
+        </section>
 
-      {/* Programs List - DYNAMIC SECTION */}
-      <section id="program-list" className="py-16 bg-gray-50">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="text-center mb-12"
-          >
-            <h2 className="text-3xl font-bold text-gray-800 mb-4">Our Programs</h2>
-            <div className="w-20 h-1 bg-pink-500 mx-auto mb-6"></div>
-            <p className="text-gray-600 max-w-3xl mx-auto">
-              Each program is designed by Dr. Yogita and her team of expert physiotherapists to address specific
-              conditions and goals.
-            </p>
-          </motion.div>
+        {/* Program Series List Section */}
+        <section id="program-series-list" className="py-16 bg-gray-50">
+          <div className="container mx-auto px-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+              className="text-center mb-12"
+            >
+              <h2 className="text-3xl font-bold text-gray-800 mb-4">Our Program Series</h2>
+              <div className="w-20 h-1 bg-pink-500 mx-auto mb-6"></div>
+              <p className="text-gray-600 max-w-3xl mx-auto">
+                Browse through our collections of specialized physiotherapy programs.
+              </p>
+            </motion.div>
 
-          {isLoading && <p className="text-center text-lg text-gray-700 py-10">Loading programs...</p>}
-          {error && <p className="text-center text-lg text-red-600 py-10">Error: {error}</p>}
+            {loadingSeries && <p className="text-center text-lg text-gray-700 py-10">Loading program series...</p>}
+            {errorSeries && <p className="text-center text-lg text-red-600 py-10">Error: {errorSeries}</p>}
 
-          {!isLoading && !error && programs.length === 0 && (
-            <p className="text-center text-lg text-gray-600 py-10">No programs available at the moment. Please check back soon!</p>
-          )}
+            {!loadingSeries && !errorSeries && programSeriesList.length === 0 && (
+              <div className="text-center text-gray-600 py-10">
+                <Info size={48} className="mx-auto mb-4 text-gray-400" />
+                <p className="text-xl">No program series found at the moment.</p>
+                <p>Please check back later!</p>
+              </div>
+            )}
 
-          {!isLoading && !error && programs.length > 0 && (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {programs.map((program, index) => (
-                <motion.div
-                  key={program._id} // Use _id from MongoDB
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.5, delay: index * 0.05 }}
-                  className="bg-white rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-shadow flex flex-col"
-                >
-                  <div className="relative">
-                    <Image
-                      src={program.thumbnailUrl || "/placeholder.svg"} // Use thumbnailUrl from backend
-                      alt={program.title}
-                      width={400}
-                      height={250}
-                      className="w-full h-48 object-cover"
-                      priority={index < 3} // Prioritize loading for above-the-fold images
-                      unoptimized={program.thumbnailUrl?.includes("cloudinary") ? true : false} // Add this if you face issues with Cloudinary & Next/Image optimization
-                    />
-                    <div className="absolute bottom-0 left-0 bg-pink-500 text-white px-3 py-1 rounded-tr-lg flex items-center text-sm">
-                      <Clock className="h-4 w-4 mr-1" />
-                      <span>{program.duration}</span>
+            {!loadingSeries && !errorSeries && programSeriesList.length > 0 && (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {programSeriesList.map((series, index) => (
+                  <motion.div
+                    key={series._id}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.5, delay: index * 0.05 }}
+                    className="rounded-xl border border-gray-200 bg-white shadow-lg hover:shadow-2xl transition-shadow duration-300 flex flex-col overflow-hidden group"
+                  >
+                    <div className="relative w-full aspect-[16/10] overflow-hidden">
+                      <Image
+                        src={series.coverImageUrl}
+                        alt={series.title}
+                        fill
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        priority={index < 3}
+                        unoptimized={series.coverImageUrl?.includes("cloudinary")}
+                      />
                     </div>
-                  </div>
-
-                  <div className="p-6 flex flex-col flex-grow"> {/* flex-grow ensures footer content is pushed down */}
-                    <h3 className="text-xl font-semibold text-gray-800 mb-2">{program.title}</h3>
-                    <p className="text-gray-600 text-sm mb-4 flex-grow min-h-[60px]">{program.description}</p> {/* flex-grow for description, min-h for consistent height */}
-
-                    <div className="mt-auto"> {/* Pushes buttons to the bottom */}
-                      <div className="flex justify-between items-center mb-4">
-                          <span className="text-2xl font-bold text-pink-500">₹{program.price}</span>
-                          {/* This button could link to a program detail page or be an "Add to Cart" button */}
-                          <Link href={`/programs/${program.slug}`}>
-                              <Button variant="outline" size="sm" className="text-pink-500 border-pink-500 hover:bg-pink-50 hover:text-pink-600">
-                                  View Details
-                              </Button>
-                          </Link>
-                      </div>
-
-                      {program.youtubeLink && program.youtubeLink.trim() !== '' ? (
-                        <a
-                          href={program.youtubeLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full block" // Make anchor take full width for button styling
-                        >
-                          <Button className="w-full bg-red-500 hover:bg-red-600 text-white rounded-md font-medium flex items-center justify-center">
-                            <Youtube className="mr-2 h-5 w-5" />
-                            See Program on YouTube
-                          </Button>
-                        </a>
-                      ) : (
-                        <Button
-                          className="w-full bg-gray-400 hover:bg-gray-500 text-white rounded-md font-medium flex items-center justify-center cursor-not-allowed"
-                          disabled
-                        >
-                          <Play className="mr-2 h-5 w-5" />
-                          Program Coming Soon
-                        </Button>
+                    <div className="p-5 flex flex-col flex-grow">
+                      <h3 className="mb-2 text-xl font-semibold tracking-tight text-gray-900 group-hover:text-pink-600 transition-colors">
+                        {series.title}
+                      </h3>
+                      <p className="mb-4 font-normal text-gray-600 text-sm flex-grow line-clamp-3" title={series.description}>
+                        {series.description}
+                      </p>
+                      {series.category && (
+                         <p className="text-xs text-pink-600 font-medium mb-1">Category: {series.category}</p>
                       )}
+                      {series.author && (
+                         <p className="text-xs text-gray-500 font-medium mb-3">By: {series.author}</p>
+                      )}
+                      <Button
+                        onClick={() => handleOpenProgramModal(series)}
+                        className="w-full mt-auto bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white transition-all"
+                        aria-label={`View programs in ${series.title}`}
+                      >
+                        <ListVideo className="mr-2 h-5 w-5" />
+                        View Programs in this Series
+                      </Button>
                     </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
 
-      {/* Testimonials Section */}
-      <section className="py-16 bg-gradient-to-r from-pink-100 to-blue-100">
+        {/* Testimonials & FAQ Sections (Can remain similar) */}
+        {/* ... your existing Testimonials section ... */}
+        {/* ... your existing FAQ section ... */}
+          <section className="py-16 bg-gradient-to-r from-pink-100 to-blue-100">
         <div className="container mx-auto px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -351,93 +397,20 @@ export default function ProgramsClientPage() {
           </div>
         </div>
       </section>
-
-      {/* FAQ Section */}
-      <section className="py-16 bg-white">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="text-center mb-12"
-          >
-            <h2 className="text-3xl font-bold text-gray-800 mb-4">Frequently Asked Questions</h2>
-            <div className="w-20 h-1 bg-pink-500 mx-auto"></div>
-          </motion.div>
-          <div className="max-w-3xl mx-auto space-y-6">
-            {/* FAQ Item 1 */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0 }}
-            >
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">How do I access the program after purchase?</h3>
-              <p className="text-gray-600">
-                After completing your purchase, you'll receive the full program video directly on your WhatsApp within
-                24 hours. You'll also receive an email confirmation with details.
-              </p>
-            </motion.div>
-            {/* FAQ Item 2 */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">Can I view the program on multiple devices?</h3>
-              <p className="text-gray-600">
-                Yes, once you receive the video on WhatsApp, you can save it to your device and view it on any
-                compatible device. You can also request the video to be sent to a different WhatsApp number if needed.
-              </p>
-            </motion.div>
-             {/* FAQ Item 3 */}
-             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-            >
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">Are these programs suitable for beginners?</h3>
-              <p className="text-gray-600">
-                Yes, all our programs are designed with clear instructions and modifications for different fitness
-                levels. Each exercise is demonstrated with proper form and technique guidance.
-              </p>
-            </motion.div>
-             {/* FAQ Item 4 */}
-             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-            >
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">How long do I have access to the program?</h3>
-              <p className="text-gray-600">
-                Once you receive the video, it's yours to keep permanently. There are no subscription fees or time
-                limitations on access.
-              </p>
-            </motion.div>
-             {/* FAQ Item 5 */}
-             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-            >
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                Can I get a refund if the program doesn't work for me?
-              </h3>
-              <p className="text-gray-600">
-                Due to the digital nature of our programs, we do not offer refunds once the video has been delivered.
-                However, we're happy to provide guidance or answer questions to help you get the most out of your
-                program.
-              </p>
-            </motion.div>
-          </div>
-        </div>
-      </section>
       <FooterSection />
-    </main>
-  )
+      </main>
+
+      {selectedProgramSeries && (
+        <ProgramModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          seriesTitle={selectedProgramSeries.title}
+          programs={selectedSeriesPrograms} // Pass the fetched programs
+          loading={loadingProgramsInModal}
+          error={errorProgramsInModal}
+          formatDate={formatDate} // Pass if used in modal
+        />
+      )}
+    </>
+  );
 }
