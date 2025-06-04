@@ -263,7 +263,7 @@ const NutritionClientPage = () => {
             setIsLoadingStatusCheck={setIsLoadingStatusCheck}
         />
         <>
-            <section className="bg-gray-50 py-10 md:py-16">
+            <section className="bg-gray-50 py-28 md:py-28">
             <div className="container mx-auto px-4">
                 <motion.h1 
                     className="text-3xl md:text-4xl font-bold text-center text-gray-800 mb-6"
